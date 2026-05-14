@@ -6,10 +6,10 @@ import httpx
 import logging
 import asyncio
 from signal_generator import TradeSignal
-from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHANNEL_ID, ADMIN_IDS
+import config
 
 logger = logging.getLogger(__name__)
-TELEGRAM_API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
+# TELEGRAM_API built lazily in TelegramNotifier.__init__
 
 DIR_EMOJI  = {"LONG": "🟢", "SHORT": "🔴"}
 TYPE_EMOJI = {"TREND": "📈", "RANGE": "↔️"}
