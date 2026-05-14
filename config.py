@@ -1,30 +1,9 @@
 # ============================================================
 #  CONFIGURATION
-#  All secrets loaded from environment variables.
+#  Secrets loaded lazily from environment variables.
 #  Set these in Railway dashboard → Variables tab.
 # ============================================================
 import os
-
-def _require(key: str) -> str:
-    val = os.environ.get(key, "").strip()
-    if not val:
-        raise RuntimeError(
-            f"❌ Missing required environment variable: {key}\n"
-            f"   Set it in Railway → Variables tab."
-        )
-    return val
-
-def _optional(key: str, default: str = "") -> str:
-    return os.environ.get(key, default).strip()
-
-# ── Required secrets (set in Railway Variables) ──────────────
-TELEGRAM_BOT_TOKEN  = _require("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHANNEL_ID = _require("TELEGRAM_CHANNEL_ID")
-
-# ── Admin IDs (comma-separated in Railway Variables) ─────────
-# Example: ADMIN_IDS=123456789,987654321
-_raw_admins = _optional("ADMIN_IDS", "")
-ADMIN_IDS = [int(x.strip()) for x in _raw_admins.split(",") if x.strip().isdigit()]
 
 # ── Scanning ─────────────────────────────────────────────────
 SCAN_INTERVAL_MINUTES = 15
@@ -63,27 +42,27 @@ PATTERN_LOOKBACK    = 50
 MIN_PATTERN_CANDLES = 8
 
 # ── TP/SL Monitor ────────────────────────────────────────────
-MONITOR_CHECK_INTERVAL_MINUTES = 5  # How often to check TP/SL (1-15 min)
-MONITOR_MAX_CANDLES_WATCH      = 96 # Stop watching after N x 15m candles (96 = 24h)
+MONITOR_CHECK_INTERVAL_MINUTES = 5
+MONITOR_MAX_CANDLES_WATCH      = 96
 
-# ── Channel Defaults (overridden live via /admin commands) ───
-CHANNEL_DEFAULT_STRATEGY  = "ALL"   # ALL / TREND / RANGE / PATTERN
+# ── Channel Defaults ─────────────────────────────────────────
+CHANNEL_DEFAULT_STRATEGY  = "ALL"
 CHANNEL_DEFAULT_MIN_SCORE = 5.0
-CHANNEL_DEFAULT_SESSIONS  = ["ALL"] # ALL / ASIA / LONDON / NEWYORK
+CHANNEL_DEFAULT_SESSIONS  = ["ALL"]
 
 # ── User Defaults ────────────────────────────────────────────
 USER_DEFAULT_STRATEGY     = "ALL"
 USER_DEFAULT_MIN_SCORE    = 5.0
 USER_DEFAULT_SESSIONS     = ["ALL"]
-USER_INACTIVE_DAYS        = 30      # Auto-pause after N days inactive
-USER_INACTIVE_WARN_DAYS   = 25      # Warn user at N days
+USER_INACTIVE_DAYS        = 30
+USER_INACTIVE_WARN_DAYS   = 25
 
 # ── Rate Limits ──────────────────────────────────────────────
 FREE_MAX_SIGNALS_PER_HOUR = 3
 PRO_MAX_SIGNALS_PER_HOUR  = 10
 
-# ── Scanner Channel ──────────────────────────────────────────
-MAX_SIGNALS_PER_SCAN      = 3       # Max signals sent to channel per scan
+# ── Scanner ──────────────────────────────────────────────────
+MAX_SIGNALS_PER_SCAN = 3
 
 # ── Sessions (UTC hours) ─────────────────────────────────────
 SESSIONS = {
@@ -92,3 +71,74 @@ SESSIONS = {
     "NEWYORK" : (12, 21),
     "ALL"     : (0,  24),
 }
+
+
+# ── Lazy-loaded secrets ───────────────────────────────────────
+# These are functions so they are only called at runtime,
+# NOT at import time — this fixes Railway build errors.
+
+def get_bot_token() -> str:
+    val = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    if not val:
+        raise RuntimeError(
+            "❌ Missing environment variable: TELEGRAM_BOT_TOKEN\n"
+            "   Set it in Railway → Variables tab."
+        )
+    return val
+
+
+def get_channel_id() -> str:
+    val = os.environ.get("TELEGRAM_CHANNEL_ID", "").strip()
+    if not val:
+        raise RuntimeError(
+            "❌ Missing environment variable: TELEGRAM_CHANNEL_ID\n"
+            "   Set it in Railway → Variables tab."
+        )
+    return val
+
+
+def get_admin_ids() -> list[int]:
+    raw = os.environ.get("ADMIN_IDS", "").strip()
+    return [int(x.strip()) for x in raw.split(",") if x.strip().isdigit()]
+
+
+# ── Convenience properties (read once at first use) ──────────
+# Modules import these names — they resolve lazily on first call.
+
+class _LazySecrets:
+    """Reads env vars only when first accessed, not at import time."""
+    _token   = None
+    _channel = None
+    _admins  = None
+
+    @property
+    def TELEGRAM_BOT_TOKEN(self) -> str:
+        if self._token is None:
+            self._token = get_bot_token()
+        return self._token
+
+    @property
+    def TELEGRAM_CHANNEL_ID(self) -> str:
+        if self._channel is None:
+            self._channel = get_channel_id()
+        return self._channel
+
+    @property
+    def ADMIN_IDS(self) -> list[int]:
+        if self._admins is None:
+            self._admins = get_admin_ids()
+        return self._admins
+
+
+_secrets = _LazySecrets()
+
+# These names are what other modules import.
+# They are descriptors — accessed only when used, not at import.
+def __getattr__(name):
+    if name == "TELEGRAM_BOT_TOKEN":
+        return _secrets.TELEGRAM_BOT_TOKEN
+    if name == "TELEGRAM_CHANNEL_ID":
+        return _secrets.TELEGRAM_CHANNEL_ID
+    if name == "ADMIN_IDS":
+        return _secrets.ADMIN_IDS
+    raise AttributeError(f"module 'config' has no attribute '{name}'")
