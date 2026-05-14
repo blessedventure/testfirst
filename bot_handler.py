@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 import httpx
-from config import ADMIN_IDS, TELEGRAM_BOT_TOKEN
+import config
 import database as db
 from telegram_bot import (
     TelegramNotifier, format_signal,
@@ -15,7 +15,7 @@ from telegram_bot import (
 )
 
 logger = logging.getLogger(__name__)
-API = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}"
+# API URL built lazily in BotHandler methods
 
 # ── Keyboard builders ────────────────────────────────────────
 
@@ -238,7 +238,7 @@ class BotHandler:
     async def _get_updates(self) -> list[dict]:
         try:
             resp = await self._client.get(
-                f"{API}/getUpdates",
+                f"https://api.telegram.org/bot{config.TELEGRAM_BOT_TOKEN}/getUpdates",
                 params={"offset": self._offset, "timeout": 20, "limit": 50},
                 timeout=httpx.Timeout(25.0)
             )
@@ -278,7 +278,7 @@ class BotHandler:
         if not text:
             return
 
-        is_admin = user_id in ADMIN_IDS
+        is_admin = user_id in config.ADMIN_IDS
         db.upsert_user(user_id, username, first_name)
 
         # Broadcast text collection
@@ -332,7 +332,7 @@ class BotHandler:
         user_id  = cb["from"]["id"]
         data     = cb.get("data", "")
         cb_id    = cb["id"]
-        is_admin = user_id in ADMIN_IDS
+        is_admin = user_id in config.ADMIN_IDS
         first_name = cb["from"].get("first_name", "")
 
         db.touch_user(user_id)
